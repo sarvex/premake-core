@@ -34,7 +34,7 @@ import tempfile
 
 class ReadFileLineException(Exception):
     def __init__(self, filename, line_number):
-        message = 'in {} at {}'.format(filename, line_number)
+        message = f'in {filename} at {line_number}'
         super(ReadFileLineException, self).__init__(message)
         self.filename = filename
         self.line_number = line_number
@@ -88,17 +88,17 @@ class Inputs:
     def __init__(self):
         self.all_declared = set()
         # Sets of names per type
-        self.statuses = set(['PSA_SUCCESS'])
-        self.algorithms = set(['0xffffffff'])
-        self.ecc_curves = set(['0xff'])
-        self.dh_groups = set(['0xff'])
-        self.key_types = set(['0xffff'])
-        self.key_usage_flags = set(['0x80000000'])
+        self.statuses = {'PSA_SUCCESS'}
+        self.algorithms = {'0xffffffff'}
+        self.ecc_curves = {'0xff'}
+        self.dh_groups = {'0xff'}
+        self.key_types = {'0xffff'}
+        self.key_usage_flags = {'0x80000000'}
         # Hard-coded value for unknown algorithms
-        self.hash_algorithms = set(['0x020000fe'])
-        self.mac_algorithms = set(['0x0300ffff'])
-        self.ka_algorithms = set(['0x09fc0000'])
-        self.kdf_algorithms = set(['0x080000ff'])
+        self.hash_algorithms = {'0x020000fe'}
+        self.mac_algorithms = {'0x0300ffff'}
+        self.ka_algorithms = {'0x09fc0000'}
+        self.kdf_algorithms = {'0x080000ff'}
         # For AEAD algorithms, the only variability is over the tag length,
         # and this only applies to known algorithms, so don't test an
         # unknown algorithm.
@@ -170,7 +170,7 @@ class Inputs:
     @staticmethod
     def _format_arguments(name, arguments):
         """Format a macro call with arguments.."""
-        return name + '(' + ', '.join(arguments) + ')'
+        return f'{name}(' + ', '.join(arguments) + ')'
 
     def distribute_arguments(self, name):
         """Generate macro calls with each tested argument set.
@@ -186,7 +186,7 @@ class Inputs:
                 return
             argspec = self.argspecs[name]
             if argspec == []:
-                yield name + '()'
+                yield f'{name}()'
                 return
             argument_lists = [self.arguments_for[arg] for arg in argspec]
             arguments = [values[0] for values in argument_lists]
@@ -200,7 +200,7 @@ class Inputs:
                     yield self._format_arguments(name, arguments)
                 arguments[i] = argument_lists[0][0]
         except BaseException as e:
-            raise Exception('distribute_arguments({})'.format(name)) from e
+            raise Exception(f'distribute_arguments({name})') from e
 
     def generate_expressions(self, names):
         return itertools.chain(*map(self.distribute_arguments, names))
@@ -233,17 +233,17 @@ class Inputs:
         m = re.match(self._header_line_re, line)
         if not m:
             return
-        name = m.group(1)
+        name = m[1]
         self.all_declared.add(name)
         if re.search(self._excluded_name_re, name) or \
-           name in self._excluded_names:
+               name in self._excluded_names:
             return
-        dest = self.table_by_prefix.get(m.group(2))
+        dest = self.table_by_prefix.get(m[2])
         if dest is None:
             return
         dest.add(name)
-        if m.group(3):
-            self.argspecs[name] = self._argument_split(m.group(3))
+        if m[3]:
+            self.argspecs[name] = self._argument_split(m[3])
 
     _nonascii_re = re.compile(rb'[^\x00-\x7f]+')
     def parse_header(self, filename):
@@ -260,9 +260,7 @@ class Inputs:
                 yield name
 
     def accept_test_case_line(self, function, argument):
-        #pylint: disable=unused-argument
-        undeclared = list(self.generate_undeclared_names(argument))
-        if undeclared:
+        if undeclared := list(self.generate_undeclared_names(argument)):
             raise Exception('Undeclared names in test case', undeclared)
         return True
 
@@ -290,9 +288,8 @@ class Inputs:
         """Parse a test case file (*.data), looking for algorithm metadata tests."""
         with read_file_lines(filename) as lines:
             for line in lines:
-                m = re.match(self._test_case_line_re, line)
-                if m:
-                    self.add_test_case_line(m.group(1), m.group(2))
+                if m := re.match(self._test_case_line_re, line):
+                    self.add_test_case_line(m[1], m[2])
 
 def gather_inputs(headers, test_suites, inputs_class=Inputs):
     """Read the list of inputs to test psa_constant_names with."""
@@ -326,15 +323,16 @@ def run_c(type_word, expressions, include_path=None, keep_c=False):
     c_name = None
     exe_name = None
     try:
-        c_fd, c_name = tempfile.mkstemp(prefix='tmp-{}-'.format(type_word),
-                                        suffix='.c',
-                                        dir='programs/psa')
+        c_fd, c_name = tempfile.mkstemp(
+            prefix=f'tmp-{type_word}-', suffix='.c', dir='programs/psa'
+        )
         exe_suffix = '.exe' if platform.system() == 'Windows' else ''
         exe_name = c_name[:-2] + exe_suffix
         remove_file_if_exists(exe_name)
         c_file = os.fdopen(c_fd, 'w', encoding='ascii')
-        c_file.write('/* Generated by test_psa_constant_names.py for {} values */'
-                     .format(type_word))
+        c_file.write(
+            f'/* Generated by test_psa_constant_names.py for {type_word} values */'
+        )
         c_file.write('''
 #include <stdio.h>
 #include <psa/crypto.h>
@@ -342,19 +340,20 @@ int main(void)
 {
 ''')
         for expr in expressions:
-            c_file.write('    printf("{}\\n", ({}) {});\n'
-                         .format(printf_format, cast_to, expr))
+            c_file.write(f'    printf("{printf_format}\\n", ({cast_to}) {expr});\n')
         c_file.write('''    return 0;
 }
 ''')
         c_file.close()
         cc = os.getenv('CC', 'cc')
-        subprocess.check_call([cc] +
-                              ['-I' + dir for dir in include_path] +
-                              ['-o', exe_name, c_name])
+        subprocess.check_call(
+            (
+                ([cc] + [f'-I{dir}' for dir in include_path])
+                + ['-o', exe_name, c_name]
+            )
+        )
         if keep_c:
-            sys.stderr.write('List of {} tests kept at {}\n'
-                             .format(type_word, c_name))
+            sys.stderr.write(f'List of {type_word} tests kept at {c_name}\n')
         else:
             os.remove(c_name)
         output = subprocess.check_output([exe_name])
@@ -409,7 +408,7 @@ class Tests:
         self.count += len(expressions)
         for expr, value, output in zip(expressions, values, outputs):
             if self.options.show:
-                sys.stdout.write('{} {}\t{}\n'.format(type_word, value, output))
+                sys.stdout.write(f'{type_word} {value}\t{output}\n')
             if normalize(expr) != normalize(output):
                 self.errors.append(self.Error(type=type_word,
                                               expression=expr,
@@ -429,12 +428,12 @@ class Tests:
         Also write a total.
         """
         for error in self.errors:
-            out.write('For {} "{}", got "{}" (value: {})\n'
-                      .format(error.type, error.expression,
-                              error.output, error.value))
-        out.write('{} test cases'.format(self.count))
+            out.write(
+                f'For {error.type} "{error.expression}", got "{error.output}" (value: {error.value})\n'
+            )
+        out.write(f'{self.count} test cases')
         if self.errors:
-            out.write(', {} FAIL\n'.format(len(self.errors)))
+            out.write(f', {len(self.errors)} FAIL\n')
         else:
             out.write(' PASS\n')
 

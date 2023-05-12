@@ -254,14 +254,14 @@ class MacroCollector:
             # Macro only to build actual values
             return
         elif (name.startswith('PSA_ERROR_') or name == 'PSA_SUCCESS') \
-           and not parameter:
+               and not parameter:
             self.statuses.add(name)
         elif name.startswith('PSA_KEY_TYPE_') and not parameter:
             self.key_types.add(name)
         elif name.startswith('PSA_KEY_TYPE_') and parameter == 'curve':
-            self.key_types_from_curve[name] = name[:13] + 'IS_' + name[13:]
+            self.key_types_from_curve[name] = f'{name[:13]}IS_{name[13:]}'
         elif name.startswith('PSA_KEY_TYPE_') and parameter == 'group':
-            self.key_types_from_group[name] = name[:13] + 'IS_' + name[13:]
+            self.key_types_from_group[name] = f'{name[:13]}IS_{name[13:]}'
         elif name.startswith('PSA_ECC_FAMILY_') and not parameter:
             self.ecc_curves.add(name)
         elif name.startswith('PSA_DH_FAMILY_') and not parameter:
@@ -281,9 +281,9 @@ class MacroCollector:
         elif name.startswith('PSA_ALG_') and parameter == 'hash_alg':
             if name in ['PSA_ALG_DSA', 'PSA_ALG_ECDSA']:
                 # A naming irregularity
-                tester = name[:8] + 'IS_RANDOMIZED_' + name[8:]
+                tester = f'{name[:8]}IS_RANDOMIZED_{name[8:]}'
             else:
-                tester = name[:8] + 'IS_' + name[8:]
+                tester = f'{name[:8]}IS_{name[8:]}'
             self.algorithms_from_hash[name] = tester
         elif name.startswith('PSA_KEY_USAGE_') and not parameter:
             self.key_usages.add(name)
@@ -295,11 +295,9 @@ class MacroCollector:
     _continued_line_re = re.compile(rb'\\\r?\n\Z')
     def read_file(self, header_file):
         for line in header_file:
-            m = re.search(self._continued_line_re, line)
-            while m:
+            while m := re.search(self._continued_line_re, line):
                 cont = next(header_file)
                 line = line[:m.start(0)] + cont
-                m = re.search(self._continued_line_re, line)
             line = re.sub(self._nonascii_re, rb'', line).decode('ascii')
             self.read_line(line)
 
@@ -389,8 +387,7 @@ class MacroCollector:
         """Generate the pretty-printer function code from the gathered
         constant definitions.
         """
-        data = {}
-        data['status_cases'] = self._make_status_cases()
+        data = {'status_cases': self._make_status_cases()}
         data['ecc_curve_cases'] = self._make_ecc_curve_cases()
         data['dh_group_cases'] = self._make_dh_group_cases()
         data['key_type_cases'] = self._make_key_type_cases()
@@ -408,7 +405,7 @@ def generate_psa_constants(header_file_names, output_file_name):
     for header_file_name in header_file_names:
         with open(header_file_name, 'rb') as header_file:
             collector.read_file(header_file)
-    temp_file_name = output_file_name + '.tmp'
+    temp_file_name = f'{output_file_name}.tmp'
     with open(temp_file_name, 'w') as output_file:
         collector.write_file(output_file)
     os.replace(temp_file_name, output_file_name)
@@ -418,6 +415,7 @@ if __name__ == '__main__':
         os.chdir('..')
     # Allow to change the directory where psa_constant_names_generated.c is written to.
     OUTPUT_FILE_DIR = sys.argv[1] if len(sys.argv) == 2 else "programs/psa"
-    generate_psa_constants(['include/psa/crypto_values.h',
-                            'include/psa/crypto_extra.h'],
-                           OUTPUT_FILE_DIR + '/psa_constant_names_generated.c')
+    generate_psa_constants(
+        ['include/psa/crypto_values.h', 'include/psa/crypto_extra.h'],
+        f'{OUTPUT_FILE_DIR}/psa_constant_names_generated.c',
+    )

@@ -128,10 +128,8 @@ class GenDep(TestCase):
         dependency list.
         :return:
         """
-        dependencies = []
         count = 10
-        for i in range(count):
-            dependencies.append('DEP%d' % i)
+        dependencies = ['DEP%d' % i for i in range(count)]
         dep_start, dep_end = gen_dependencies(dependencies)
         self.assertEqual(len(dep_start.splitlines()), count,
                          'Preprocessor generated incorrectly')
@@ -193,13 +191,10 @@ class GenDepOneLine(TestCase):
         dependency list.
         :return:
         """
-        dependencies = []
         count = 10
-        for i in range(count):
-            dependencies.append('DEP%d' % i)
+        dependencies = ['DEP%d' % i for i in range(count)]
         dep_str = gen_dependencies_one_line(dependencies)
-        expected = '#if ' + ' && '.join(['defined(%s)' %
-                                         x for x in dependencies])
+        expected = '#if ' + ' && '.join([f'defined({x})' for x in dependencies])
         self.assertEqual(dep_str, expected,
                          'Preprocessor generated incorrectly')
 
@@ -317,13 +312,7 @@ class StringIOWrapper(StringIO):
         :return: Line read from file.
         """
         parent = super(StringIOWrapper, self)
-        if getattr(parent, 'next', None):
-            # Python 2
-            line = parent.next()
-        else:
-            # Python 3
-            line = parent.__next__()
-        return line
+        return parent.next() if getattr(parent, 'next', None) else parent.__next__()
 
     # Python 3
     __next__ = next
